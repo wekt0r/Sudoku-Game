@@ -1,6 +1,5 @@
 from random import randint, choice, choices
-from copy import deepcopy
-from collections import defaultdict
+from collections import defaultdict, deque
 from multiprocessing.pool import ThreadPool
 
 
@@ -91,47 +90,37 @@ class Sudoku:
     def __str__(self):
         return "\n".join([" ".join(map(str, row)) for row in self.board])
 
-    def __deepcopy__(self, memo):
-        """Make deepcopy of sudoku."""
-        return Sudoku(deepcopy(self.board))
+    def cp(self):
+        """Make fast copy of sudoku."""
+        return Sudoku([list(row) for row in self.board])
 
 
 def solve(sudoku):
     """
     Check if sudoku has solution and return this solution.
-
-    Done with multiprocessing.
     """
     to_fill = [(i, j) for i in range(0, 9) for j in range(0, 9)
                if sudoku.board[i][j] == 0]
-
-    solver = ThreadPool(processes=1)
-    solution = solver.apply_async(_solve, (deepcopy(sudoku), to_fill))
-
-    return solution.get()
+    return _solve(sudoku.cp(), to_fill)
 
 
 def _is_valid_line(line):
     return all(line.count(i) <= 1 for i in range(1, 10))
 
 
-def _solve(sudoku, to_fill):
-    k = 0
-    ks = defaultdict(int)
-    while 0 <= k < len(to_fill):
-        i, j = to_fill[k]
-        for value in range(ks[k] + 1, 10):
-            ks[k] = value
-            sudoku.board[i][j] = value
-            if sudoku.is_valid_board():
-                k += 1
-                break
-
-        if ks[k] == 9:
-            ks[k] = 0
-            sudoku.board[i][j] = 0
-            k -= 1
-    return k == len(to_fill), sudoku
+def _solve(starting_sudoku, starting_to_fill):
+    stack = deque([(starting_sudoku, starting_to_fill)])
+    while stack:
+        sudoku, to_fill = stack.pop()
+        if not to_fill and sudoku.is_valid_board():
+            return True, sudoku
+        if to_fill and sudoku.is_valid_board():
+            [(i,j), *rest_to_fill] = to_fill
+            for val in range(1,10):
+                new_sudoku = sudoku.cp()
+                new_sudoku.put(i,j,val)
+                stack.append((new_sudoku, rest_to_fill))
+    return False, starting_sudoku
 
 
 def _transpose(matrix):
